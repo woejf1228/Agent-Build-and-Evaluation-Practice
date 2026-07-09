@@ -261,49 +261,22 @@ MEMORY_SOURCES = ["/AGENTS.md"]
 # deepagents 내장 BASE_AGENT_PROMPT 를 그대로 가져온 것이다. 자유롭게 편집하면 된다.
 # (파일시스템 / write_todos / execute 도구 '사용법' 은 이와 별개로 각 미들웨어가
 #  자동 주입하므로, 여기서는 에이전트의 행동 원칙만 다룬다.)
-SYSTEM_PROMPT = """You are a deep agent, an AI assistant that helps users accomplish tasks using tools. You respond with text and tool calls. The user can see your responses and tool outputs in real time.
+SYSTEM_PROMPT = """# 정체성 및 목적 (Identity & Purpose)
+당신은 10년 경력의 대규모 IT 인프라 아키텍처 노하우를 가진 베테랑 SRE(Site Reliability Engineer)이자 장애 트러블슈팅 전문가입니다. Pinpoint APM 알림이나 WAS 로그, Stack Trace가 인입되면 수초 내에 핵심 예외를 추출하고 인프라 상태를 진단하여 우선순위별 조치 가이드를 엔지니어에게 서빙하는 임무를 맡고 있습니다.
 
-## Core Behavior
+# 운영 환경 맥락 (Technical Context)
+당신의 모든 기술적 판단과 쉘 스크립트, kubectl 명령어 추천은 반드시 다음 인프라 환경 스택 내부로 제한됩니다.
+- OS: RHEL 8.5 (Red Hat Enterprise Linux) / 서버 RAM: 128GB 기준
+- Web/WAS: Apache Tomcat, Tmax JEUS
+- Message Queue: IBM MQ
+- APM & Platform: Pinpoint, Vanilla Kubernetes (K8S) 컨테이너 플랫폼
 
-- Be concise and direct. Don't over-explain unless asked.
-- NEVER add unnecessary preamble ("Sure!", "Great question!", "I'll now...").
-- Don't say "I'll now do X" — just do it.
-- If the request is underspecified, ask only the minimum followup needed to take the next useful action.
-- If asked how to approach something, explain first, then act.
-
-## Professional Objectivity
-
-- Prioritize accuracy over validating the user's beliefs
-- Disagree respectfully when the user is incorrect
-- Avoid unnecessary superlatives, praise, or emotional validation
-
-## Doing Tasks
-
-When the user asks you to do something:
-
-1. **Understand first** — read relevant files, check existing patterns. Quick but thorough — gather enough evidence to start, then iterate.
-2. **Act** — implement the solution. Work quickly but accurately.
-3. **Verify** — check your work against what was asked, not against your own output. Your first attempt is rarely correct — iterate.
-
-Keep working until the task is fully complete. Don't stop partway and explain what you would do — just do it. Only yield back to the user when the task is done or you're genuinely blocked.
-
-**When things go wrong:**
-
-- If something fails repeatedly, stop and analyze *why* — don't keep retrying the same approach.
-- If you're blocked, tell the user what's wrong and ask for guidance.
-
-## Clarifying Requests
-
-- Do not ask for details the user already supplied.
-- Use reasonable defaults when the request clearly implies them.
-- Prioritize missing semantics like content, delivery, detail level, or alert criteria.
-- Avoid opening with a long explanation of tool, scheduling, or integration limitations when a concise blocking followup question would move the task forward.
-- Ask domain-defining questions before implementation questions.
-- For monitoring or alerting requests, ask what signals, thresholds, or conditions should trigger an alert.
-
-## Progress Updates
-
-For longer tasks, provide brief progress updates at reasonable intervals — a concise sentence recapping what you've done and what's next."""
+# 예외 없는 절대 규칙 (Core System Rules)
+1. 근거 기반 작성 (Strict No-Hallucination): 입력된 에러 로그 파일 및 스택 트레이스에 명시되지 않은 에러 코드나 시스템 현황은 절대로 임의로 지어내지 마십시오. 정보가 불충분할 경우 대안을 지어내지 말고 부족한 로그가 무엇인지 명시하십시오.
+2. 보수적 진단 원칙: 에러 원인을 추정할 때 100% 확정적인 어조로 단정 짓지 마십시오. 엔지니어의 유연한 판단을 돕기 위해 항상 "가장 유력한 원인 가설 후보", "점검 필요 대상"과 같은 보수적인 표현을 사용하십시오.
+3. 데이터 마스킹 및 보안 (Information Security): 사내 자산 정보 및 내부 소스 유출 방지를 위해 실제 서버 IP 주소, 내부 계정명, 시스템 내부 핵심 경로는 출력 시 반드시 '<TARGET_IP>', '<USER_NAME>' 형태로 치환하여 마스킹하십시오.
+4. 휴먼 인 더 루프 (Human-in-the-Loop): 에이전트는 독립적으로 핫픽스 배포나 Pod 재시작 등 인프라 변경 조치를 직접 실행할 수 없습니다. 모든 출력물의 최하단에는 반드시 다음 경고 문구를 강제로 포함하십시오: "**[확인] 본 가이드는 AI 분석 결과입니다. 실제 인프라 조치 및 전파는 담당 엔지니어의 최종 판단과 승인 하에 진행하십시오.**"
+5. 표준 템플릿 강제: 장애 분석 요청을 받으면 대화 스타일을 배제하고, 오직 'AGENTS.md'에 정의된 [장애 분석 표준 리포트] 레이아웃 순서와 마크다운 서식을 엄격하게 준수하여 출력하십시오."""
 
 
 # ---------------------------------------------------------------------------
@@ -442,6 +415,58 @@ def _studio_url(base_url: str) -> str:
     """주어진 API baseUrl 로 LangGraph Studio 링크를 만든다(트레일링 슬래시 제거)."""
     return f"https://smith.langchain.com/studio/?baseUrl={base_url.rstrip('/')}"
 
+def save_to_local_docx(report_content, filename="my_agent_plan.docx"):
+    """
+    에이전트가 생성한 마크다운 리포트를 Word(DOCX) 호환 포맷으로 가공하여
+    Codespace 내부의 workspace/ 폴더에 로컬 파일로 저장합니다.
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    workspace_dir = os.path.join(current_dir, "workspace")
+    file_path = os.path.join(workspace_dir, filename)
+    
+    # 1. Word에서 스타일이 깨지지 않도록 기본 HTML/CSS 서식으로 마크다운을 간단히 치환
+    # (엔지니어링 보고서의 가독성을 위한 최소한의 가공)
+    html_content = report_content
+    html_content = html_content.replace("### [", "<h3 style='color: #1f4e78; margin-top: 20px; border-bottom: 1px solid #d3d3d3; padding-bottom: 5px;'>[")
+    html_content = html_content.replace("]", "]</h3>")
+    html_content = html_content.replace("- **", "<li><strong>").replace("**:", ":</strong>")
+    html_content = html_content.replace(">\n> ", "<blockquote style='background: #f3f3f3; border-left: 5px solid #1f4e78; padding: 10px; margin: 10px 0;'>")
+    html_content = html_content.replace("\n", "<br>")
+    
+    # 2. Word가 DOCX(XML/HTML) 규격으로 정확히 호환해 읽을 수 있도록 헤더 메타데이터 삽입
+    word_document_structure = f"""
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+        <title>SRE Agent Report</title>
+        <style>
+            body {{ font-family: 'Malgun Gothic', 'Arial', sans-serif; line-height: 1.6; font-size: 11pt; color: #333333; }}
+            code {{ font-family: 'Consolas', monospace; background-color: #f4f4f4; padding: 2px 4px; font-size: 10pt; }}
+            blockquote {{ font-style: italic; color: #555555; }}
+        </style>
+    </head>
+    <body>
+        {html_content}
+    </body>
+    </html>
+    """
+
+    try:
+        if not os.path.exists(workspace_dir):
+            os.makedirs(workspace_dir, exist_ok=True)
+            
+        # Word가 서식을 정상 파싱할 수 있도록 UTF-8-BOM 또는 UTF-8로 저장
+        with open(file_path, "w", encoding="utf-8") as file:
+            file.write(word_document_structure)
+            
+        print("\n" + "="*60)
+        print(f"[MS Word 문서 저장 완료] DOCX 파일이 로컬에 기록되었습니다.")
+        print(f"▶ 저장 경로: {file_path}")
+        print("="*60 + "\n")
+        return True
+        
+    except Exception as e:
+        print(f"\n[오류 발생] 로컬 워드 문서 저장 실패: {e}", file=sys.stderr)
+        return False
 
 if __name__ == "__main__":
     import subprocess
