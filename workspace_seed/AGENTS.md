@@ -28,3 +28,11 @@
 - **상태 진단 명령어:**
   ```bash
   kubectl describe pod <POD_NAME> -n swing
+
+## Meta-Harness Optimization History
+- 최신 평가일: 2026-07-09
+- 현재 종합 Pass율: 85%
+
+### 발견된 약점 및 보완 지침
+- [Constraint] IBM MQ 장애 진단 시 `dspmq` 명령어를 누락하는 경향이 있음 -> 향후 IBM MQ 관련 로그 분석 시 반드시 `dspmq` 및 `runmqsc` 점검 단계를 가이드에 최우선 포함할 것.
+- [Masking] K8S 네임스페이스명을 그대로 노출하는 실수가 있었음 -> `<NAMESPACE>` 형태로 철저히 마스킹할 것.
