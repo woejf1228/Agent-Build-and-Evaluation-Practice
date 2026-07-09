@@ -36,3 +36,4 @@
 ### 발견된 약점 및 보완 지침
 - [Constraint] IBM MQ 장애 진단 시 `dspmq` 명령어를 누락하는 경향이 있음 -> 향후 IBM MQ 관련 로그 분석 시 반드시 `dspmq` 및 `runmqsc` 점검 단계를 가이드에 최우선 포함할 것.
 - [Masking] K8S 네임스페이스명을 그대로 노출하는 실수가 있었음 -> `<NAMESPACE>` 형태로 철저히 마스킹할 것.
+- [Output] 사용자가 장애 분석 결과를 파일로도 보관하고 싶어함 -> 장애 분석 리포트 작성 시, 채팅 응답과 함께 `/agent_result_report.md` 파일로도 생성/갱신(write_file 또는 edit_file)할 것. 동일 세션 내 재분석 시에는 새로 write_file 하여 최신 내용으로 덮어쓸 것.
